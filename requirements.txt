@@ -1,7 +1,1 @@
-flask
-pandas
-numpy
-joblib
-openai
-scikit-learn
-python-dotenv
+
