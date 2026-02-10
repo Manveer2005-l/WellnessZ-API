@@ -5,9 +5,3 @@ joblib
 openai
 scikit-learn
 python-dotenv
-<<<<<<< HEAD
-gunicorn
-=======
-scikit-learn
-gunicorn
->>>>>>> 08763ab (Fix deploy: add scikit-learn and pin Python 3.11)
