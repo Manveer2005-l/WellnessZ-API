@@ -1,1 +1,12 @@
+<<<<<<< HEAD
+=======
+flask
+pandas
+numpy
+joblib
+openai
+scikit-learn
+gunicorn
+python-dotenv
+>>>>>>> 3516aeb (Resolve requirements conflict (scikit-learn + gunicorn))
 
