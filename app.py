@@ -1,35 +1,58 @@
 from flask import Flask, request, jsonify
 import pandas as pd
 from wellnessz_runtime import predict_clients, generate_explanation
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = os.path.join(BASE_DIR, ".env")
+load_dotenv(ENV_PATH)
 
 app = Flask(__name__)
 
-# ---------- Endpoint 1: Analyze CSV ----------
-@app.route("/analyze", methods=["POST"])
-def analyze_clients():
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
 
-    file = request.files["file"]
-    df = pd.read_csv(file)
+API_KEY = os.getenv("WELLNESSZ_API_KEY", "dev-key")
 
-    results = predict_clients(df)
-    return results.to_json(orient="records")
+print("DEBUG → WELLNESSZ_API_KEY =", API_KEY)
 
 
-# ---------- Endpoint 2: Explain one client ----------
-@app.route("/explain", methods=["POST"])
-def explain_client():
-    data = request.json
-    df = pd.DataFrame([data])
+# ---------- Health check ----------
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"})
 
-    df = predict_clients(df)
-    row = df.iloc[0]
+
+# ---------- Single client prediction ----------
+@app.route("/predict", methods=["POST"])
+def predict_single_client():
+
+    # --- simple auth (enough for now)
+    auth = request.headers.get("Authorization")
+    
+    if auth != f"Bearer {API_KEY}":
+        return jsonify({"error": "Unauthorized"}), 401
+
+    
+
+    print("RAW BODY:", request.data)
+    data = request.get_json(force=True)
+    print("PARSED JSON:", data)
+
+    if "metrics" not in data:
+        return jsonify({"error": "metrics missing"}), 4
+    # build dataframe expected by your engine
+    df = pd.DataFrame([data["metrics"]])
+    df["client_id"] = data.get("client_id")
+
+    df_out = predict_clients(df)
+    row = df_out.iloc[0]
 
     explanation = generate_explanation(row)
 
     return jsonify({
-        "client_id": row.get("client_id", None),
+        "client_id": row.client_id,
         "triage": row.triage,
         "control_focus": row.control_focus,
         "health_distance": float(row.health_distance),
@@ -40,6 +63,7 @@ def explain_client():
         },
         "explanation": explanation
     })
+
+
 if __name__ == "__main__":
-    app.run(debug=True)
-#curl.exe -X POST http://127.0.0.1:5000/analyze -F "file=@clients.csv"
+    app.run(host="0.0.0.0", port=5000)

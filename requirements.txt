@@ -4,3 +4,4 @@ numpy
 joblib
 openai
 python-dotenv
+gunicorn

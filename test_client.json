@@ -1,0 +1,11 @@
+{
+  "client_id": "TEST_001",
+  "metrics": {
+    "bmi": 27.3,
+    "hm_visceral_fat": 11,
+    "hm_muscle": 32,
+    "hm_rm": 48,
+    "age": 30,
+    "sex": 1
+  }
+}
