@@ -109,12 +109,16 @@ Primary focus: {row.control_focus}
 Coaching level: {row.triage}
 """
 
-    resp = client.chat.completions.create(
-        model="gpt-5-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}
-        ]
-    )
-
-    return resp.choices[0].message.content
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            timeout=15
+        )
+        return resp.choices[0].message.content
+    except Exception as e:
+        return "Explanation temporarily unavailable. Core health metrics and recommendations are still valid."
+    
