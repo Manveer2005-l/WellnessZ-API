@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import pandas as pd
 import requests
 import os
-
+from trajectory_engine import predict_trajectory
 from wellnessz_runtime import predict_clients, generate_explanation
 from dotenv import load_dotenv
 
@@ -43,11 +43,30 @@ def fetch_client_metrics(client_id: str) -> dict:
 
     data = resp.json()
 
-    # defaults if missing
     data.setdefault("age", 1)
     data.setdefault("sex", 1)
 
     return data
+
+
+# ---------- engine ----------
+
+def wellnessz_engine(df):
+
+    baseline_df = predict_clients(df)
+    row = baseline_df.iloc[-1]
+
+    response = _format_response(row)
+
+    # If multiple visits → add trajectory
+    if len(df) >= 2:
+        try:
+            trajectory = predict_trajectory(df)
+            response["trajectory"] = trajectory
+        except Exception as e:
+            response["trajectory_error"] = str(e)
+
+    return response
 
 
 # ---------- routes ----------
@@ -59,6 +78,7 @@ def health():
 
 @app.route("/predict", methods=["POST"])
 def predict_manual():
+
     auth = request.headers.get("Authorization")
     if auth != f"Bearer {API_KEY}":
         return jsonify({"error": "Unauthorized"}), 401
@@ -69,20 +89,21 @@ def predict_manual():
         return jsonify({"error": "metrics missing"}), 400
 
     metrics = payload["metrics"]
+
     metrics.setdefault("age", 1)
     metrics.setdefault("sex", 1)
 
     df = pd.DataFrame([metrics])
     df["client_id"] = payload.get("client_id", "MANUAL")
 
-    df_out = predict_clients(df)
-    row = df_out.iloc[0]
+    result = wellnessz_engine(df)
 
-    return jsonify(_format_response(row))
+    return jsonify(result)
 
 
 @app.route("/predict/by-id", methods=["POST"])
 def predict_by_id():
+
     auth = request.headers.get("Authorization")
     if auth != f"Bearer {API_KEY}":
         return jsonify({"error": "Unauthorized"}), 401
@@ -98,18 +119,24 @@ def predict_by_id():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    df = pd.DataFrame([metrics])
+    data = fetch_client_metrics(client_id)
+
+# If backend returns visit history
+    if "visits" in data:
+        df = pd.DataFrame(data["visits"])
+    else:
+        df = pd.DataFrame([data])
     df["client_id"] = client_id
 
-    df_out = predict_clients(df)
-    row = df_out.iloc[0]
+    result = wellnessz_engine(df)
 
-    return jsonify(_format_response(row))
+    return jsonify(result)
 
 
 # ---------- formatter ----------
 
 def _format_response(row):
+
     explanation = generate_explanation(row)
 
     return {
