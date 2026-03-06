@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import pandas as pd
 import requests
 import os
+import time
 from trajectory_engine import predict_trajectory
 from wellnessz_runtime import predict_clients, generate_explanation
 from dotenv import load_dotenv
@@ -19,9 +20,6 @@ CLIENT_API_KEY = os.getenv("CLIENT_API_KEY")
 
 
 # ---------- helpers ----------
-
-import time
-import requests
 
 def fetch_client_metrics(client_id: str) -> dict:
     """
@@ -44,27 +42,31 @@ def fetch_client_metrics(client_id: str) -> dict:
     for attempt in range(3):
 
         try:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = requests.get(url, headers=headers, timeout=40)
 
+            # SUCCESS
             if resp.status_code == 200:
                 data = resp.json()
                 data.setdefault("age", 1)
                 data.setdefault("sex", 1)
                 return data
 
+            # RATE LIMIT
             if resp.status_code == 429:
+                print("Rate limit hit, retrying...")
                 time.sleep(2)
                 continue
 
+            # OTHER ERROR
             raise RuntimeError(f"Client fetch failed ({resp.status_code})")
 
         except requests.exceptions.ReadTimeout:
             print("Backend timeout, retrying...")
             time.sleep(3)
 
-raise RuntimeError("Backend unreachable after retries")
-    # After retries
-    
+    raise RuntimeError("Backend unreachable after retries")
+
+
 # ---------- engine ----------
 
 def wellnessz_engine(df):
@@ -74,7 +76,7 @@ def wellnessz_engine(df):
 
     response = _format_response(row)
 
-    # If multiple visits → add trajectory
+    # trajectory prediction if multiple visits
     if len(df) >= 2:
         try:
             trajectory = predict_trajectory(df)
@@ -114,6 +116,9 @@ def predict_manual():
 
     result = wellnessz_engine(df)
 
+    return jsonify(result)
+
+
 @app.route("/predict/by-id", methods=["POST"])
 def predict_by_id():
 
@@ -129,10 +134,8 @@ def predict_by_id():
     client_id = data["client_id"]
 
     try:
-        # fetch metrics from backend
         metrics = fetch_client_metrics(client_id)
 
-        # if backend returns visits history
         if "visits" in metrics:
             df = pd.DataFrame(metrics["visits"])
         else:
@@ -145,9 +148,10 @@ def predict_by_id():
         return jsonify(result)
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": "Backend unavailable",
+            "details": str(e)
+        }), 503
 
 
 # ---------- formatter ----------
@@ -169,6 +173,8 @@ def _format_response(row):
         "explanation": explanation
     }
 
+
+# ---------- run ----------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
