@@ -98,9 +98,6 @@ def predict_manual():
 
     result = wellnessz_engine(df)
 
-    return jsonify(result)
-
-
 @app.route("/predict/by-id", methods=["POST"])
 def predict_by_id():
 
@@ -108,29 +105,33 @@ def predict_by_id():
     if auth != f"Bearer {API_KEY}":
         return jsonify({"error": "Unauthorized"}), 401
 
-    payload = request.get_json(force=True)
-    client_id = payload.get("client_id")
+    data = request.get_json()
 
-    if not client_id:
+    if not data or "client_id" not in data:
         return jsonify({"error": "client_id missing"}), 400
 
+    client_id = data["client_id"]
+
     try:
+        # fetch metrics from backend
         metrics = fetch_client_metrics(client_id)
+
+        # if backend returns visits history
+        if "visits" in metrics:
+            df = pd.DataFrame(metrics["visits"])
+        else:
+            df = pd.DataFrame([metrics])
+
+        df["client_id"] = client_id
+
+        result = wellnessz_engine(df)
+
+        return jsonify(result)
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
-    data = fetch_client_metrics(client_id)
-
-# If backend returns visit history
-    if "visits" in data:
-        df = pd.DataFrame(data["visits"])
-    else:
-        df = pd.DataFrame([data])
-    df["client_id"] = client_id
-
-    result = wellnessz_engine(df)
-
-    return jsonify(result)
 
 
 # ---------- formatter ----------
