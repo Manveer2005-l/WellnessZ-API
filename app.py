@@ -20,10 +20,14 @@ CLIENT_API_KEY = os.getenv("CLIENT_API_KEY")
 
 # ---------- helpers ----------
 
+import time
+import requests
+
 def fetch_client_metrics(client_id: str) -> dict:
     """
     Fetch client metrics from external backend
     """
+
     if DATA_MODE != "REMOTE":
         raise RuntimeError("REMOTE data mode not enabled")
 
@@ -31,24 +35,36 @@ def fetch_client_metrics(client_id: str) -> dict:
         raise RuntimeError("CLIENT_API_BASE_URL not set")
 
     url = f"{CLIENT_API_BASE_URL}/clients/{client_id}"
+
     headers = {
         "Authorization": f"Bearer {CLIENT_API_KEY}",
         "Content-Type": "application/json"
     }
 
-    resp = requests.get(url, headers=headers, timeout=10)
+    for attempt in range(3):
 
-    if resp.status_code != 200:
+        resp = requests.get(url, headers=headers, timeout=10)
+
+        # SUCCESS
+        if resp.status_code == 200:
+            data = resp.json()
+
+            data.setdefault("age", 1)
+            data.setdefault("sex", 1)
+
+            return data
+
+        # RATE LIMIT → retry
+        if resp.status_code == 429:
+            print("Rate limit hit, retrying...")
+            time.sleep(2)
+            continue
+
+        # OTHER ERROR
         raise RuntimeError(f"Client fetch failed ({resp.status_code})")
 
-    data = resp.json()
-
-    data.setdefault("age", 1)
-    data.setdefault("sex", 1)
-
-    return data
-
-
+    # After retries
+    raise RuntimeError("Backend rate limit exceeded")
 # ---------- engine ----------
 
 def wellnessz_engine(df):
