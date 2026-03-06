@@ -43,28 +43,28 @@ def fetch_client_metrics(client_id: str) -> dict:
 
     for attempt in range(3):
 
-        resp = requests.get(url, headers=headers, timeout=10)
+        try:
+            resp = requests.get(url, headers=headers, timeout=30)
 
-        # SUCCESS
-        if resp.status_code == 200:
-            data = resp.json()
+            if resp.status_code == 200:
+                data = resp.json()
+                data.setdefault("age", 1)
+                data.setdefault("sex", 1)
+                return data
 
-            data.setdefault("age", 1)
-            data.setdefault("sex", 1)
+            if resp.status_code == 429:
+                time.sleep(2)
+                continue
 
-            return data
+            raise RuntimeError(f"Client fetch failed ({resp.status_code})")
 
-        # RATE LIMIT → retry
-        if resp.status_code == 429:
-            print("Rate limit hit, retrying...")
-            time.sleep(2)
-            continue
+        except requests.exceptions.ReadTimeout:
+            print("Backend timeout, retrying...")
+            time.sleep(3)
 
-        # OTHER ERROR
-        raise RuntimeError(f"Client fetch failed ({resp.status_code})")
-
+raise RuntimeError("Backend unreachable after retries")
     # After retries
-    raise RuntimeError("Backend rate limit exceeded")
+    
 # ---------- engine ----------
 
 def wellnessz_engine(df):
