@@ -44,20 +44,17 @@ def fetch_client_metrics(client_id: str) -> dict:
         try:
             resp = requests.get(url, headers=headers, timeout=40)
 
-            # SUCCESS
             if resp.status_code == 200:
                 data = resp.json()
-                data.setdefault("age", 1)
+                data.setdefault("age", 30)
                 data.setdefault("sex", 1)
                 return data
 
-            # RATE LIMIT
             if resp.status_code == 429:
                 print("Rate limit hit, retrying...")
                 time.sleep(2)
                 continue
 
-            # OTHER ERROR
             raise RuntimeError(f"Client fetch failed ({resp.status_code})")
 
         except requests.exceptions.ReadTimeout:
@@ -65,6 +62,21 @@ def fetch_client_metrics(client_id: str) -> dict:
             time.sleep(3)
 
     raise RuntimeError("Backend unreachable after retries")
+
+
+# ---------- feature mapping ----------
+
+def build_feature_row(client_id, metrics):
+
+    return {
+        "client_id": client_id,
+        "bmi": metrics.get("bmi", 0),
+        "hm_visceral_fat": metrics.get("visceral_fat", 10),
+        "hm_muscle": metrics.get("muscle", 0),
+        "hm_rm": metrics.get("rm", 1),
+        "age": metrics.get("age", 30),
+        "sex": metrics.get("sex", 1)
+    }
 
 
 # ---------- engine ----------
@@ -76,7 +88,6 @@ def wellnessz_engine(df):
 
     response = _format_response(row)
 
-    # trajectory prediction if multiple visits
     if len(df) >= 2:
         try:
             trajectory = predict_trajectory(df)
@@ -108,11 +119,12 @@ def predict_manual():
 
     metrics = payload["metrics"]
 
-    metrics.setdefault("age", 1)
-    metrics.setdefault("sex", 1)
+    row = build_feature_row(
+        payload.get("client_id", "MANUAL"),
+        metrics
+    )
 
-    df = pd.DataFrame([metrics])
-    df["client_id"] = payload.get("client_id", "MANUAL")
+    df = pd.DataFrame([row])
 
     result = wellnessz_engine(df)
 
@@ -134,14 +146,18 @@ def predict_by_id():
     client_id = data["client_id"]
 
     try:
+
         metrics = fetch_client_metrics(client_id)
 
-        if "visits" in metrics:
-            df = pd.DataFrame(metrics["visits"])
-        else:
-            df = pd.DataFrame([metrics])
+        rows = []
 
-        df["client_id"] = client_id
+        if "visits" in metrics:
+            for v in metrics["visits"]:
+                rows.append(build_feature_row(client_id, v))
+        else:
+            rows.append(build_feature_row(client_id, metrics))
+
+        df = pd.DataFrame(rows)
 
         result = wellnessz_engine(df)
 

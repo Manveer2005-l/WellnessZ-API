@@ -42,6 +42,10 @@ def predict_clients(df_client):
         "sex": "RIAGENDR"
     }
 
+    for k in CLIENT_PROXY_MAP.keys():
+        if k not in df.columns:
+            df[k] = 0
+
     X = df[list(CLIENT_PROXY_MAP.keys())].rename(columns=CLIENT_PROXY_MAP)
 
     for col in X.columns:
