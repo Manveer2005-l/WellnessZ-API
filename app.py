@@ -118,13 +118,17 @@ def predict_manual():
         return jsonify({"error": "metrics missing"}), 400
 
     metrics = payload["metrics"]
+    client_id = payload.get("client_id", "MANUAL")
 
-    row = build_feature_row(
-        payload.get("client_id", "MANUAL"),
-        metrics
-    )
+    rows = []
 
-    df = pd.DataFrame([row])
+    if isinstance(metrics, list):
+        for m in metrics:
+            rows.append(build_feature_row(client_id, m))
+    else:
+        rows.append(build_feature_row(client_id, metrics))
+
+    df = pd.DataFrame(rows)
 
     result = wellnessz_engine(df)
 
