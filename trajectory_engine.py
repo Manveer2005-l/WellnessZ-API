@@ -13,10 +13,15 @@ def predict_trajectory(df_visits: pd.DataFrame) -> Dict[str, Any]:
     
     Calculate health trajectory across multiple client visits.
     Positive effect_size indicates health improvement.
+    If the input contains a "date" column it is used for sorting; otherwise
+    the original order is preserved and a warning is logged.
     """
     logger.debug(f"Calculating trajectory for {len(df_visits)} visits")
-    
-    df_visits = df_visits.sort_values("date")
+
+    if "date" in df_visits.columns:
+        df_visits = df_visits.sort_values("date")
+    else:
+        logger.warning("No 'date' column present; using provided order for trajectory")
 
     baseline = predict_clients(df_visits)
 
