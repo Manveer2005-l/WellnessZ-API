@@ -5,7 +5,7 @@ import requests
 import os
 import time
 import logging
-from typing import Dict, List, Union, Any
+from typing import Dict, List, Union, Any, Optional
 from pydantic import BaseModel, ValidationError, field_validator
 from trajectory_engine import predict_trajectory
 from wellnessz_runtime import predict_clients, generate_explanation
@@ -17,20 +17,26 @@ app = Flask(__name__)
 
 # IMPROVEMENT: Added logging configuration
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # temporarily verbose for debugging
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
 # IMPROVEMENT: Pydantic models for input validation
 class MetricsSchema(BaseModel):
-    """Validates individual health metrics from client."""
+    """Validates individual health metrics from client.
+
+    Added optional `date` field so that trajectory requests can pass a
+    timestamp with each visit. The field is stored as a string in ISO
+    format and not further transformed by Pydantic.
+    """
     bmi: float
     hm_visceral_fat: float
     hm_muscle: float
     hm_rm: float
     age: int
     sex: int
+    date: Optional[str] = None  # ISO date string (YYYY-MM-DD)
     
     @field_validator('hm_visceral_fat', 'hm_muscle', 'hm_rm', 'bmi')
     @classmethod
@@ -130,9 +136,14 @@ def fetch_client_metrics(client_id: str) -> dict:
 # ---------- feature mapping ----------
 
 def build_feature_row(client_id: str, metrics: Dict[str, Any]) -> Dict[str, Any]:
-    """IMPROVEMENT: Added type hints and docstring."""
-    return {
+    """IMPROVEMENT: Added type hints and docstring.
+
+    The incoming metrics dict may include a "date" key; this value is
+    preserved so that trajectory calculations can sort by visit timestamp.
+    """
+    row = {
         "client_id": client_id,
+        "date": metrics.get("date"),  # optional, may be None
         "bmi": metrics.get("bmi", 0),
         "hm_visceral_fat": metrics.get("visceral_fat", 10),
         "hm_muscle": metrics.get("muscle", 0),
@@ -140,6 +151,10 @@ def build_feature_row(client_id: str, metrics: Dict[str, Any]) -> Dict[str, Any]
         "age": metrics.get("age", 30),
         "sex": metrics.get("sex", 1)
     }
+    # propagate optional date field if present
+    if "date" in metrics:
+        row["date"] = metrics.get("date")
+    return row
 
 
 # ---------- engine ----------
@@ -154,6 +169,9 @@ def wellnessz_engine(df: pd.DataFrame) -> Dict[str, Any]:
         response = _format_response(row)
 
         if len(df) >= 2:
+            # DEBUG: inspect DataFrame prior to trajectory call
+            logger.debug(f"DF columns before trajectory: {df.columns.tolist()}")
+            logger.debug(f"DF head before trajectory:\n{df.head()}" )
             try:
                 trajectory = predict_trajectory(df)
                 response["trajectory"] = trajectory
