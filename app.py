@@ -122,6 +122,17 @@ def predict_manual():
 
     rows = []
 
+# handle list of visits
+    if isinstance(metrics, list):
+        for m in metrics:
+            rows.append(build_feature_row(client_id, m))
+    else:
+        rows.append(build_feature_row(client_id, metrics))
+
+    df = pd.DataFrame(rows)
+
+    rows = []
+
     if isinstance(metrics, list):
         for m in metrics:
             rows.append(build_feature_row(client_id, m))
