@@ -12,7 +12,11 @@ def predict_trajectory(df_visits: pd.DataFrame) -> Dict[str, Any]:
     """IMPROVEMENT: Added type hints and logging.
     
     Calculate health trajectory across multiple client visits.
-    Positive effect_size indicates health improvement.
+    The current rule considers only the change in ``health_distance``:
+    - a decrease in ``health_distance`` (moving closer to the ideal) is an
+      improvement, regardless of individual risk probabilities.
+    - an increase in ``health_distance`` results in a "Decline" trajectory.
+    Positive ``effect_size`` corresponds to an improvement.
     If the input contains a "date" column it is used for sorting; otherwise
     the original order is preserved and a warning is logged.
     """
@@ -28,15 +32,16 @@ def predict_trajectory(df_visits: pd.DataFrame) -> Dict[str, Any]:
     first = baseline.iloc[0]
     last = baseline.iloc[-1]
 
+    # compute change in health_distance only (magnitude reduction is improvement)
     hd_delta = last.health_distance - first.health_distance
-    diab_delta = last.pred_diab - first.pred_diab
-    bp_delta = last.pred_bp - first.pred_bp
-    lip_delta = last.pred_lip - first.pred_lip
 
-    effect_size = -(hd_delta + diab_delta + bp_delta + lip_delta)
+    # effect size positive when distance decreases (improvement)
+    effect_size = -hd_delta
     trajectory = "Improvement" if effect_size > 0 else "Decline"
-    
-    logger.info(f"Trajectory: {trajectory} (effect_size={effect_size:.3f})")
+
+    logger.info(
+        f"Trajectory: {trajectory} (hd_delta={hd_delta:.3f}, effect_size={effect_size:.3f})"
+    )
 
     return {
         "effect_size": float(effect_size),
