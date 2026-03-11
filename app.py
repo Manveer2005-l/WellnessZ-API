@@ -145,9 +145,9 @@ def build_feature_row(client_id: str, metrics: Dict[str, Any]) -> Dict[str, Any]
         "client_id": client_id,
         "date": metrics.get("date"),  # optional, may be None
         "bmi": metrics.get("bmi", 0),
-        "hm_visceral_fat": metrics.get("visceral_fat", 10),
-        "hm_muscle": metrics.get("muscle", 0),
-        "hm_rm": metrics.get("rm", 1),
+        "hm_visceral_fat": metrics.get("hm_visceral_fat", 10),
+        "hm_muscle": metrics.get("hm_muscle", 0),
+        "hm_rm": metrics.get("hm_rm", 1),
         "age": metrics.get("age", 30),
         "sex": metrics.get("sex", 1)
     }
@@ -172,6 +172,7 @@ def wellnessz_engine(df: pd.DataFrame) -> Dict[str, Any]:
             # DEBUG: inspect DataFrame prior to trajectory call
             logger.debug(f"DF columns before trajectory: {df.columns.tolist()}")
             logger.debug(f"DF head before trajectory:\n{df.head()}" )
+            logger.debug(df)
             try:
                 trajectory = predict_trajectory(df)
                 response["trajectory"] = trajectory
@@ -301,6 +302,9 @@ def _format_response(row: Any) -> Dict[str, Any]:
         "explanation": explanation
     }
 
+@app.route("/")
+def home():
+    return jsonify({"message": "WellnessZ API is live"})
 
 # IMPROVEMENT: Added /analyze endpoint for CSV batch processing
 @app.route("/analyze", methods=["POST"])
@@ -370,5 +374,6 @@ def analyze_csv():
 # ---------- run ----------
 
 if __name__ == "__main__":
-    logger.info("Starting WellnessZ API on 0.0.0.0:5000")
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    logger.info(f"Starting WellnessZ API on 0.0.0.0:{port}")
+    app.run(host="0.0.0.0", port=port)
